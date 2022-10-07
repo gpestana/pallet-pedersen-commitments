@@ -1,0 +1,45 @@
+[package]
+name = "pallet-pedersen-commitment"
+version = "0.1.0-dev"
+edition = "2021"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+  "derive",
+] }
+scale-info = { version = "2.1.1", default-features = false, features = [
+  "derive",
+] }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, git = "https://github.com/paritytech/substrate.git" }
+frame-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+frame-system = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+sp-core = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+sp-std = { version = "4.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+sp-runtime = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+
+# pedersen impls
+curve25519-dalek = { version = "3", default-features = false, features = [
+  "u64_backend",
+] }
+sha2 = { version = "0.9", default-features = false }
+
+[dev-dependencies]
+sp-io = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git" }
+sp-tracing = { version = "5.0.0",  git = "https://github.com/paritytech/substrate.git" }
+pallet-balances = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git" }
+
+[features]
+default = ["std"]
+std = [
+  "codec/std",
+  "frame-benchmarking/std",
+  "frame-support/std",
+  "frame-system/std",
+  "scale-info/std",
+]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+try-runtime = ["frame-support/try-runtime"]
