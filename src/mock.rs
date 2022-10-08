@@ -1,9 +1,10 @@
 use super::*;
 use crate::{self as pedersen_commitments};
+
 use frame_support::{
-    traits::ConstU32,
+    traits::{Everything, ConstU32},
     weights::{constants, Weight},
-	parameter_types,
+	parameter_types, construct_runtime,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -16,7 +17,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<AccountId, RuntimeCall, (), ()>;
 
-frame_support::construct_runtime!(
+construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
@@ -24,7 +25,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
-		PedersenCommitments: pedersen_commitments::{Pallet, Config, Storage},
+		PedersenCommitments: pedersen_commitments::{Pallet, Storage, Event<T>, Call},
 	}
 );
 
@@ -32,9 +33,9 @@ pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
 pub(crate) type BlockNumber = u64;
 
-impl crate::Config for Runtime {
+impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
-	type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
@@ -81,6 +82,16 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub MaxLenCommitMessage: u32 = 256;
+}
+
+impl pedersen_commitments::pallet::Config for Runtime {
+ 	type RuntimeEvent = RuntimeEvent;
+ 	type MaxLenCommitMessage = MaxLenCommitMessage;
+}
+
+
 #[derive(Default)]
 pub struct ExtBuilder {}
 
@@ -92,10 +103,9 @@ impl ExtBuilder {
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
-				// bunch of account for submitting stuff only.
-				(99, 100),
-				(999, 100),
-				(9999, 100),
+				(1, 100),
+				(2, 100),
+				(3, 100),
 			],
 		}
 		.assimilate_storage(&mut storage);

@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-pub use frame_system::pallet::*;
+pub use pallet::*;
 
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::{MaxEncodedLen, RuntimeDebug};
@@ -13,6 +13,8 @@ use sha2::Sha512;
 
 #[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod test;
 
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Commitment<BlockNumber> {
@@ -40,8 +42,10 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
 
     // Declare the pallet type, this is a placeholder
-    #[pallet::pallet]
-    #[pallet::generate_store(pub(super) trait Store)]
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     // Add runtime configurations, pallet types and constants
@@ -155,15 +159,4 @@ pub mod pallet {
             Ok(())
         }
     }
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-
-	#[test]
-	fn test() {
-		assert!(true, "");
-	}
-	
 }
