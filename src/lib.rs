@@ -8,6 +8,7 @@ use frame_system::ensure_signed;
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
+use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::scalar::Scalar;
 use sha2::Sha512;
 
@@ -16,13 +17,42 @@ mod mock;
 #[cfg(test)]
 mod test;
 
+// TODO(gpestana): abstract undelying crypto scheme
 #[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Commitment<BlockNumber> {
-    point_g: [u8; 64],
-    point_h: [u8; 64],
-    payload: [u8; 64],
+    point_g: [u8; 32],
+    point_h: [u8; 32],
+    payload: [u8; 32],
     committed_at: BlockNumber,
     revealed_at: Option<BlockNumber>,
+}
+
+impl<T> Commitment<T> {
+    pub fn verify_commitment(self, secret: &Vec<u8>, message: &Vec<u8>) -> bool {
+        let r = Scalar::hash_from_bytes::<Sha512>(&secret);
+        let m = Scalar::hash_from_bytes::<Sha512>(&message);
+
+        // TODO(gpestana): handle unwraps and map to results
+        let commitment_payload = CompressedRistretto::from_slice(&self.payload)
+            .decompress()
+            .unwrap();
+        let commitment_g = CompressedRistretto::from_slice(&self.point_g)
+            .decompress()
+            .unwrap();
+        let commitment_h = CompressedRistretto::from_slice(&self.point_h)
+            .decompress()
+            .unwrap();
+
+        let payload = {
+            let gm = m * commitment_g;
+            let hr = r * commitment_h;
+
+            //r_commitment_payload == gm + hr
+            gm + hr
+        };
+
+        commitment_payload == payload
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -41,19 +71,17 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
 
-    // Declare the pallet type, this is a placeholder
-
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
+    #[pallet::pallet]
+    #[pallet::generate_store(pub(super) trait Store)]
+    #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     // Add runtime configurations, pallet types and constants
     #[pallet::config]
     pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
-			+ TryInto<Event<Self>>;
+        type RuntimeEvent: From<Event<Self>>
+            + IsType<<Self as frame_system::Config>::RuntimeEvent>
+            + TryInto<Event<Self>>;
 
         #[pallet::constant]
         type MaxLenCommitMessage: Get<u32>;
@@ -82,7 +110,7 @@ pub mod pallet {
 
     // Declares storage types
     #[pallet::storage]
-    #[pallet::getter(fn commitment)]
+    #[pallet::getter(fn commitments)]
     pub type CommitmentsStorage<T: Config> =
         StorageMap<_, Twox256, T::AccountId, Commitment<T::BlockNumber>>;
 
@@ -91,11 +119,11 @@ pub mod pallet {
         #[pallet::weight(10_000)] // TODO: set proper weight
         pub fn commit(
             origin: OriginFor<T>,
-            payload: [u8; 64],
-            point_g: [u8; 64], // TODO: refactor -- is a constant for ristretto
-            point_h: [u8; 64],
+            payload: [u8; 32],
+            point_g: [u8; 32],
+            point_h: [u8; 32],
         ) -> DispatchResult {
-            let commiter = ensure_signed(origin.clone())?;
+            let commiter = ensure_signed(origin)?;
 
             let committed_at = frame_system::Pallet::<T>::block_number();
 
@@ -125,25 +153,10 @@ pub mod pallet {
                 Error::<T>::CommitmentMessageIsTooLarge
             );
 
-            // refactor to crypto module
-            let r_secret = Scalar::hash_from_bytes::<Sha512>(&secret);
-            let r_message = Scalar::hash_from_bytes::<Sha512>(&message);
-
             let mut commitment =
-                Self::commitment(&revealer).ok_or(Error::<T>::NoActiveCommitmentForOrigin)?;
+                Self::commitments(&revealer).ok_or(Error::<T>::NoActiveCommitmentForOrigin)?;
 
-            let r_commitment_payload = Scalar::hash_from_bytes::<Sha512>(&commitment.payload);
-            let r_commitment_point_g = Scalar::hash_from_bytes::<Sha512>(&commitment.point_g);
-            let r_commitment_point_h = Scalar::hash_from_bytes::<Sha512>(&commitment.point_h);
-
-            let reveal_ok = {
-                let gm = r_message * r_commitment_point_g;
-                let hr = r_secret * r_commitment_point_h;
-
-                r_commitment_payload == gm + hr
-            };
-
-            if !reveal_ok {
+            if !commitment.verify_commitment(&secret, &message) {
                 return Err(Error::<T>::UnableToReveal.into());
             }
 
