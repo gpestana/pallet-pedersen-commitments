@@ -15,7 +15,7 @@ pub struct Commitment {
 }
 
 impl Commitment {
-    pub fn new(message: String, secret: String) -> Self {
+    pub fn new(message: &str, secret: &str) -> Self {
         let mut rng = OsRng;
 
         let g = constants::RISTRETTO_BASEPOINT_POINT;
@@ -62,8 +62,8 @@ mod tests {
         ExtBuilder::default().build_and_execute(|| {
             let caller = 0;
 
-            let (message, secret) = ("commited_message".to_string(), "secret".to_string());
-            let commitment = Commitment::new(message.clone(), secret.clone());
+            let (message, secret) = ("commited_message", "secret");
+            let commitment = Commitment::new(message, secret);
 
             let commit_call = PedersenCommitments::commit(
                 RuntimeOrigin::signed(caller),
@@ -78,8 +78,8 @@ mod tests {
 
             let reveal_call = PedersenCommitments::reveal_and_verify(
                 RuntimeOrigin::signed(caller),
-                message.into_bytes(),
-                secret.into_bytes(),
+                message.to_string().into_bytes(),
+                secret.to_string().into_bytes(),
             );
 
             assert_ok!(reveal_call);
@@ -98,8 +98,8 @@ mod tests {
         ExtBuilder::default().build_and_execute(|| {
             let caller = 0;
 
-            let (message, secret) = ("commited_message".to_string(), "secret".to_string());
-            let commitment = Commitment::new(message.clone(), secret.clone());
+            let (message, secret) = ("commited_message", "secret");
+            let commitment = Commitment::new(message, secret);
 
             let commit_call = PedersenCommitments::commit(
                 RuntimeOrigin::signed(caller),
@@ -114,7 +114,7 @@ mod tests {
             let reveal_call = PedersenCommitments::reveal_and_verify(
                 RuntimeOrigin::signed(caller),
                 "different message".as_bytes().to_vec(),
-                secret.into_bytes(),
+                secret.to_string().into_bytes(),
             );
 
             assert_err!(reveal_call, crate::Error::<Runtime>::UnableToReveal);
@@ -122,11 +122,59 @@ mod tests {
             // wrong secret
             let reveal_call = PedersenCommitments::reveal_and_verify(
                 RuntimeOrigin::signed(caller),
-                message.into_bytes(),
+                message.as_bytes().to_vec(),
                 "different secret".as_bytes().to_vec(),
             );
 
             assert_err!(reveal_call, crate::Error::<Runtime>::UnableToReveal);
         })
+    }
+
+    #[test]
+    fn message_len_exceeded() {
+        ExtBuilder::default().build_and_execute(|| {
+            let caller = 0;
+            #[allow(non_snake_case)]
+            let message_285_Chars = "Lorem ipsum dolor sit amet. Nam quis nulla. Integer malesuada. In in enim a arcu imperdiet malesuada. Sed vel lectus. Donec odio urna, tempus molestie, porttitor ut, iaculis quis, sem. Phasellus rhoncus. Aenean id metus id velit ullamcorper pulvinar. Vestibulum fermentum tortor id mi.";
+            let secret = "secret";
+
+            let commitment = Commitment::new(message_285_Chars, secret);
+
+            let commit_call = PedersenCommitments::commit(
+                RuntimeOrigin::signed(caller),
+                *commitment.payload.compress().as_bytes(),
+                *commitment.g.compress().as_bytes(),
+                *commitment.h.compress().as_bytes(),
+            );
+
+            assert_ok!(commit_call);
+
+            let reveal_call = PedersenCommitments::reveal_and_verify(
+                RuntimeOrigin::signed(caller),
+                message_285_Chars.to_string().into_bytes(),
+                secret.to_string().into_bytes(),
+            );
+
+            assert_err!(reveal_call, crate::Error::<Runtime>::CommitmentMessageIsTooLarge);
+            }
+        );
+    }
+
+    #[test]
+    fn test_no_active_commitment() {
+        ExtBuilder::default().build_and_execute(|| {
+            let caller = 0;
+
+            let reveal_call_no_commitment = PedersenCommitments::reveal_and_verify(
+                RuntimeOrigin::signed(caller),
+                "some_message".to_string().into_bytes(),
+                "some_secret".to_string().into_bytes(),
+            );
+
+            assert_err!(
+                reveal_call_no_commitment,
+                crate::Error::<Runtime>::NoActiveCommitmentForOrigin
+            );
+        });
     }
 }
